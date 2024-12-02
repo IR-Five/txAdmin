@@ -62,7 +62,6 @@ export default class CitizenFXProvider {
      */
     async processCallback(sessionCallbackUri: string, sessionStateKern: string, callbackUri: string) {
         if (!this.client) throw new Error(`${modulename} is not ready`);
-        console.log(sessionCallbackUri, sessionStateKern, callbackUri)
         //Process the request
         const parsedUri = new URL(callbackUri);
         const callback = parsedUri.searchParams;
