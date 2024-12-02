@@ -87,7 +87,6 @@ export default class CitizenFXProvider {
         return tokenSet;
     }
 
-
     /**
      * Gets user info via access token
      */
@@ -105,3 +104,4 @@ export default class CitizenFXProvider {
         return { ...parsed, picture };
     }
 };
+
