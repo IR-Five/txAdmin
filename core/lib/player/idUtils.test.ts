@@ -3,21 +3,21 @@ import * as idUtils from './idUtils';
 
 
 test('parsePlayerId', () => {
-    let result = idUtils.parsePlayerId('FIVEM:555555');
+    let result = idUtils.parsePlayerId('irfive:555555');
     expect(result.isIdValid).toBe(true);
-    expect(result.idType).toBe('fivem');
+    expect(result.idType).toBe('irfive');
     expect(result.idValue).toBe('555555');
-    expect(result.idlowerCased).toBe('fivem:555555');
+    expect(result.idlowerCased).toBe('irfive:555555');
 
-    result = idUtils.parsePlayerId('fivem:xxxxx');
+    result = idUtils.parsePlayerId('irfive:xxxxx');
     expect(result.isIdValid).toBe(false);
 });
 
 test('parsePlayerIds', () => {
-    const result = idUtils.parsePlayerIds(['fivem:555555', 'fivem:xxxxx']);
-    expect(result.validIdsArray).toEqual(['fivem:555555']);
-    expect(result.invalidIdsArray).toEqual(['fivem:xxxxx']);
-    expect(result.validIdsObject?.fivem).toBe('555555');
+    const result = idUtils.parsePlayerIds(['irfive:555555', 'irfive:xxxxx']);
+    expect(result.validIdsArray).toEqual(['irfive:555555']);
+    expect(result.invalidIdsArray).toEqual(['irfive:xxxxx']);
+    expect(result.validIdsObject?.irfive).toBe('555555');
 });
 
 test('filterPlayerHwids', () => {
@@ -36,7 +36,7 @@ test('parseLaxIdsArrayInput', () => {
 });
 
 test('getIdFromOauthNameid', () => {
-    expect(idUtils.getIdFromOauthNameid('https://forum.cfx.re/internal/user/555555')).toBe('fivem:555555');
+    expect(idUtils.getIdFromOauthNameid('https://forum.cfx.re/internal/user/555555')).toBe('irfive:555555');
     expect(idUtils.getIdFromOauthNameid('xxxxx')).toBe(false);
 });
 

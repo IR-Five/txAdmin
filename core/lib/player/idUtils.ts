@@ -122,14 +122,14 @@ export const parseLaxIdsArrayInput = (fullInput: string) => {
 
 
 /**
- * Extracts the fivem:xxxxxx identifier from the nameid field from the userInfo oauth response.
+ * Extracts the irfive:xxxxxx identifier from the nameid field from the userInfo oauth response.
  * Example: https://forum.cfx.re/internal/user/271816 -> fivem:271816
  */
 export const getIdFromOauthNameid = (nameid: string) => {
     try {
         const res = /\/user\/(\d{1,8})/.exec(nameid);
         //@ts-expect-error
-        return `IRFive:${res[1]}`;
+        return `irfive:${res[1]}`;
     } catch (error) {
         return false;
     }

@@ -9,7 +9,7 @@ import { useOpenConfirmDialog, useOpenPromptDialog } from "@/hooks/dialogs";
 const InvisibleNewLine = () => <span className="opacity-0">{'\n'}</span>;
 
 const placeholderIds = [
-    'fivem:xxxxxxx',
+    'irfive:xxxxxxx',
     'license:xxxxxxxxxxxxxx',
     'discord:xxxxxxxxxxxxxxxxxx',
     'etc...',
