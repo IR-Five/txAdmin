@@ -11,7 +11,7 @@ import {
 import config from './config';
 import { parseTxDevEnv } from '../../shared/txDevEnv';
 import { TxAdminRunner } from './TxAdminRunner';
-// process.loadEnvFile();
+process.loadEnvFile();
 
 //Reset terminal
 process.stdout.write('.\n'.repeat(40) + '\x1B[2J\x1B[H');
