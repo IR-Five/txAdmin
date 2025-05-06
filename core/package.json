@@ -4,7 +4,7 @@
   "description": "The core package is the backend of txAdmin and handles running fxserver and the web server and every other internal backend stuff.",
   "type": "module",
   "scripts": {
-    "build": "cd ../ && npx tsx scripts/build/publish.ts",
+    "build": "cd ../ && npx tsx scripts/build/publish.ts --tag=v7.3.5",
     "dev": "cd ../ && npx tsx scripts/build/dev.ts",
     "test": "vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit | node ../scripts/typecheck-formatter.js",

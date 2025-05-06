@@ -6,20 +6,35 @@ import {
     licenseBanner,
 } from './utils';
 
+// ───────────────────────────────────────────────────────────────
+// STEP 1: Parse CLI arguments
+const tagArg = process.argv.find(arg => arg.startsWith('--tag='));
+if (!tagArg) {
+    throw new Error('Version setup failed: No --tag found.');
+}
+const tag = tagArg.split('=')[1];
 
-//Detect the tag/version and set the .cienv file
-const { txVersion, isPreRelease, preReleaseExpiration } = getPublishVersion(false);
+// ───────────────────────────────────────────────────────────────
+// STEP 2: Detect version using the tag
+const { txVersion, isPreRelease, preReleaseExpiration } = getPublishVersion(tag);
+
+// ───────────────────────────────────────────────────────────────
+// STEP 3: Write CI env file
 fs.writeFileSync('.github/.cienv', `TX_IS_PRERELEASE=${isPreRelease}\n`);
 
-//Copy static files
+// ───────────────────────────────────────────────────────────────
+// STEP 4: Copy static files
 console.log('Starting txAdmin Prod Builder');
 copyStaticFiles('./dist/', txVersion, 'publish');
-//yarn.installed Needs to be older than the package.json
+
+// ───────────────────────────────────────────────────────────────
+// STEP 5: Create required metadata files
 fs.writeFileSync('./dist/.yarn.installed', '');
 fs.writeFileSync('./dist/package.json', '{"type":"commonjs"}');
 fs.writeFileSync('./dist/LICENSE.txt', licenseBanner());
 
-//Transpile & bundle core
+// ───────────────────────────────────────────────────────────────
+// STEP 6: Transpile & bundle core
 try {
     const { errors } = esbuild.buildSync({
         entryPoints: ['./core'],
@@ -27,22 +42,26 @@ try {
         outfile: './dist/core/index.js',
         platform: 'node',
         target: 'node16',
-        format: 'cjs', //typescript builds to esm and esbuild converts it to cjs
+        format: 'cjs',
         minifyWhitespace: true,
         charset: 'utf8',
-        define: { TX_PRERELEASE_EXPIRATION: preReleaseExpiration },
-        banner: { js: licenseBanner(undefined, true) },
-        //To satisfy the license's "full text" requirement, it will be generated 
-        //by another npm script and it is referenced in the banner.
+        define: {
+            TX_PRERELEASE_EXPIRATION: preReleaseExpiration,
+        },
+        banner: {
+            js: licenseBanner(undefined, true),
+        },
         legalComments: 'none',
     });
+
     if (errors.length) {
-        console.log(`[BUNDLER] Failed with ${errors.length} errors.`);
+        console.error(`[BUNDLER] Failed with ${errors.length} errors.`);
         process.exit(1);
     }
 } catch (error) {
-    console.log('[BUNDLER] Errored out :(');
+    console.error('[BUNDLER] Errored out :(');
     console.dir(error);
     process.exit(1);
 }
+
 console.log('Publish task finished :)');
