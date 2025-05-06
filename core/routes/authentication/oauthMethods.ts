@@ -7,7 +7,13 @@ import { randomUUID } from "node:crypto";
 import consoleFactory from '@lib/console';
 import { UserInfoType } from "@modules/AdminStore/providers/CitizenFX";
 const console = consoleFactory(modulename);
+import crypto from 'node:crypto';
 
+const getOauthState = (stateKern: string) => {
+    const stateSeed = `tx:irfive:${stateKern}`;
+    const data = crypto.createHash('SHA1').update(stateSeed).digest('hex');
+    return crypto.createHash('SHA1').update(stateSeed).digest('hex');
+};
 
 /**
  * Sets the user session and generates the provider redirect url
@@ -45,41 +51,41 @@ export const handleOauthCallback = async (ctx: InitializedCtx, redirectUri: stri
     }
 
     //Exchange code for access token
-    let tokenSet;
-    try {
-        tokenSet = await txCore.adminStore.providers.citizenfx.processCallback(
-            inboundSession.tmpOauthLoginCallbackUri,
-            inboundSession.tmpOauthLoginStateKern,
-            redirectUri,
-        );
-        if (!tokenSet) throw new Error('tokenSet is undefined');
-        if (!tokenSet.access_token) throw new Error('tokenSet.access_token is undefined');
-    } catch (e) {
-        const error = e as any;
-        console.warn(`Code Exchange error: ${error.message}`);
-        if (error.tolerance !== undefined) {
-            return {
-                errorCode: 'clock_desync',
-            };
-        } else if (error.code === 'ETIMEDOUT') {
-            return {
-                errorCode: 'timeout',
-            };
-        } else if (error.message.startsWith('state mismatch')) {
-            return {
-                errorCode: 'invalid_state', //same as invalid_session?
-            };
-        } else {
-            return {
-                errorTitle: 'Code Exchange error:',
-                errorMessage: error.message,
-            };
-        }
-    }
+    // let tokenSet;
+    // try {
+    //     tokenSet = await txCore.adminStore.providers.citizenfx.processCallback(
+    //         inboundSession.tmpOauthLoginCallbackUri,
+    //         inboundSession.tmpOauthLoginStateKern,
+    //         redirectUri,
+    //     );
+    //     if (!tokenSet) throw new Error('tokenSet is undefined');
+    //     if (!tokenSet.access_token) throw new Error('tokenSet.access_token is undefined');
+    // } catch (e) {
+    //     const error = e as any;
+    //     console.warn(`Code Exchange error: ${error.message}`);
+    //     if (error.tolerance !== undefined) {
+    //         return {
+    //             errorCode: 'clock_desync',
+    //         };
+    //     } else if (error.code === 'ETIMEDOUT') {
+    //         return {
+    //             errorCode: 'timeout',
+    //         };
+    //     } else if (error.message.startsWith('state mismatch')) {
+    //         return {
+    //             errorCode: 'invalid_state', //same as invalid_session?
+    //         };
+    //     } else {
+    //         return {
+    //             errorTitle: 'Code Exchange error:',
+    //             errorMessage: error.message,
+    //         };
+    //     }
+    // }
 
     //Get userinfo
     try {
-        return await txCore.adminStore.providers.citizenfx.getUserInfo(tokenSet.access_token);
+        return await txCore.adminStore.providers.citizenfx.getUserInfo(getOauthState(inboundSession.tmpOauthLoginStateKern));
     } catch (error) {
         console.verbose.error(`Get UserInfo error: ${(error as Error).message}`);
         return {

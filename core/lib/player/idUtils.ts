@@ -129,7 +129,7 @@ export const getIdFromOauthNameid = (nameid: string) => {
     try {
         const res = /\/user\/(\d{1,8})/.exec(nameid);
         //@ts-expect-error
-        return `fivem:${res[1]}`;
+        return `IRFive:${res[1]}`;
     } catch (error) {
         return false;
     }
