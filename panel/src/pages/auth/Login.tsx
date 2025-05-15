@@ -233,7 +233,7 @@ export default function Login() {
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     ) : (
                         <LogInIcon className="inline mr-2 h-4 w-4" />
-                    )} Login with Cfx.re
+                    )} Login with IRFive
                 </Button>
             </CardContent>
         </form>
