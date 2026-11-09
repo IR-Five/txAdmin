@@ -11,7 +11,7 @@ export const parsePlayerId = (idString: string) => {
         return { isIdValid: false, idType: null, idValue: null, idlowerCased: null };
     }
 
-    const idlowerCased = idString.toLocaleLowerCase();
+    const idlowerCased = idString.toLowerCase();
     const [idType, idValue] = idlowerCased.split(':', 2);
     const validator = consts.validIdentifiers[idType as keyof typeof consts.validIdentifiers];
     if (validator && validator.test(idlowerCased)) {
@@ -31,6 +31,7 @@ export const parsePlayerIds = (ids: string[]) => {
     const validIdsObject: PlayerIdsObjectType = {
         discord: null,
         fivem: null,
+        irfive: null,
         license: null,
         license2: null,
         live: null,
@@ -40,9 +41,9 @@ export const parsePlayerIds = (ids: string[]) => {
 
     for (const idString of ids) {
         if (typeof idString !== 'string') continue;
-        const { isIdValid, idType, idValue } = parsePlayerId(idString);
+        const { isIdValid, idType, idValue, idlowerCased } = parsePlayerId(idString);
         if (isIdValid) {
-            validIdsArray.push(idString);
+            validIdsArray.push(idlowerCased!);
             validIdsObject[idType as keyof PlayerIdsObjectType] = idValue;
         } else {
             invalidIdsArray.push(idString);
@@ -76,7 +77,7 @@ export const filterPlayerHwids = (hwids: string[]) => {
 /**
  * Attempts to parse a user-provided string into an array of valid identifiers.
  * This function is lenient and will attempt to parse any string into an array of valid identifiers.
- * For non-prefixed ids, it will attempt to parse it as discord, fivem, steam, or license.
+ * Unprefixed numeric account IDs default to IRFive. Ambiguous HWIDs can use hwid:<token>.
  * Returns an array of valid ids/hwids, and array of invalid identifiers.
  * 
  * Stricter version of this function is parsePlayerIds
@@ -89,32 +90,37 @@ export const parseLaxIdsArrayInput = (fullInput: string) => {
     if (typeof fullInput !== 'string') {
         return { validIds, validHwids, invalids };
     }
-    const inputs = fullInput.toLowerCase().split(/[,;\s]+/g).filter(Boolean);
+    const inputs = fullInput.split(/[,;\s]+/g).filter(Boolean);
 
-    for (const input of inputs) {
+    for (const rawInput of inputs) {
+        const input = rawInput.toLowerCase();
+        if (input.startsWith('hwid:')) {
+            const hwid = rawInput.slice(5);
+            if (consts.regexValidHwidToken.test(hwid)) validHwids.push(hwid);
+            else invalids.push(rawInput);
+            continue;
+        }
         if (input.includes(':')) {
-            if (consts.regexValidHwidToken.test(input)) {
-                validHwids.push(input);
+            if (consts.regexValidHwidToken.test(rawInput)) {
+                validHwids.push(rawInput);
             } else if (Object.values(consts.validIdentifiers).some((regex) => regex.test(input))) {
                 validIds.push(input);
             } else {
-                const [type, value] = input.split(':', 1);
-                if (consts.validIdentifierParts[type as keyof typeof consts.validIdentifierParts]?.test(value)) {
-                    validIds.push(input);
-                } else {
-                    invalids.push(input);
-                }
+                invalids.push(rawInput);
             }
         } else if (consts.validIdentifierParts.discord.test(input)) {
             validIds.push(`discord:${input}`);
-        } else if (consts.validIdentifierParts.fivem.test(input)) {
-            validIds.push(`fivem:${input}`);
-        } else if (consts.validIdentifierParts.license.test(input)) {
-            validIds.push(`license:${input}`);
+        } else if (consts.validIdentifierParts.irfive.test(input)) {
+            validIds.push(`irfive:${input}`);
         } else if (consts.validIdentifierParts.steam.test(input)) {
             validIds.push(`steam:${input}`);
+        } else if (/^[0-9a-f]{40}$/.test(input)) {
+            // Preserve the original unprefixed FiveM license format.
+            validIds.push(`license:${input}`);
+        } else if (consts.regexValidHwidToken.test(rawInput)) {
+            validHwids.push(rawInput);
         } else {
-            invalids.push(input);
+            invalids.push(rawInput);
         }
     }
 
@@ -124,13 +130,19 @@ export const parseLaxIdsArrayInput = (fullInput: string) => {
 
 /**
  * Extracts the irfive:xxxxxx identifier from the nameid field from the userInfo oauth response.
- * Example: https://forum.cfx.re/internal/user/271816 -> fivem:271816
+ * Accepts the exact path returned by the IRFive SSO provider, without truncating long IDs.
  */
 export const getIdFromOauthNameid = (nameid: string) => {
     try {
-        const res = /\/user\/(\d{1,8})/.exec(nameid);
-        //@ts-expect-error
-        return `irfive:${res[1]}`;
+        if (typeof nameid !== 'string') return false;
+        let pathname = nameid;
+        if (nameid.startsWith('https://')) {
+            const url = new URL(nameid);
+            if (url.origin !== 'https://forum.irfive.ir' || url.username || url.password || url.search || url.hash) return false;
+            pathname = url.pathname;
+        }
+        const res = /^\/(?:internal\/)?user\/([1-9][0-9]{0,7})$/.exec(pathname);
+        return res ? `irfive:${res[1]}` : false;
     } catch (error) {
         return false;
     }

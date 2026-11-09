@@ -1,107 +1,97 @@
-const modulename = 'AdminStore:CfxProvider';
 import crypto from 'node:crypto';
-import { BaseClient, Issuer, custom } from 'openid-client';
-import { URL } from 'node:url';
-import consoleFactory from '@lib/console';
+import got from 'got';
 import { z } from 'zod';
-const console = consoleFactory(modulename);
 
+// This adapter uses the IRFive authorization-code + PKCE bridge, not OpenID Connect.
+// No secret embedded in a distributed txAdmin client can authenticate that client.
+const ssoOrigin = 'https://sso.irfive.ir';
+const forumOrigin = 'https://forum.irfive.ir';
+const clientId = 'txadmin';
+const tokenPattern = /^[A-Za-z0-9_-]{43}$/;
+const tokenSchema = z.object({
+    access_token: z.string().regex(tokenPattern),
+    token_type: z.literal('Bearer'),
+    expires_in: z.number().int().positive().max(120),
+    scope: z.literal('identify'),
+});
+const forumUrl = z.string().url().max(2048).refine(value => {
+    const url = new URL(value);
+    return url.origin === forumOrigin && !url.username && !url.password;
+});
 const userInfoSchema = z.object({
-    name: z.string().min(1),
-    profile: z.string().min(1),
-    nameid: z.string().min(1),
+    name: z.string().regex(/^[A-Za-z0-9_.-]{1,64}$/),
+    profile: forumUrl,
+    nameid: z.string().regex(/^\/user\/[1-9][0-9]{0,7}$/),
+    picture: forumUrl.optional(),
 });
 export type UserInfoType = z.infer<typeof userInfoSchema> & { picture: string | undefined };
 
-const getOauthState = (stateKern: string) => {
-    const stateSeed = `tx:irfive:${stateKern}`;
-    return crypto.createHash('SHA1').update(stateSeed).digest('hex');
+const same = (a: string, b: string) => Buffer.byteLength(a) === Buffer.byteLength(b)
+    && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
+const hash = (value: string) => crypto.createHash('sha256').update(value).digest('base64url');
+const stateFor = (seed: string) => hash(`tx:irfive:state:${seed}`);
+const verifierFor = (seed: string) => hash(`tx:irfive:pkce:${seed}`);
+const checkSeed = (seed: string) => {
+    const match = /^(\d{13})\.([A-Za-z0-9_-]{43})$/.exec(seed);
+    if (!match || Date.now() - Number(match[1]) > 300000 || Number(match[1]) > Date.now() + 30000) {
+        throw new Error('invalid_session');
+    }
 };
-
+const checkCallbackUrl = (value: string) => {
+    const url = new URL(value);
+    const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+    if (url.username || url.password || url.hash || url.search
+        || (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback))
+        || !['/login/callback', '/addMaster/callback'].includes(url.pathname)) throw new Error('invalid_session');
+    return url;
+};
 
 export default class CfxProvider {
-    private client?: BaseClient;
-
-    constructor() {
-        //NOTE: using static config due to performance concerns
-        // const fivemIssuer = await Issuer.discover('https://sso.irfive.ir/.well-known/openid-configuration');
-        const fivemIssuer = new Issuer({ 'issuer': 'https://sso.irfive.ir', 'jwks_uri': 'https://sso.irfive.ir/.well-known/openid-configuration/jwks', 'authorization_endpoint': 'https://sso.irfive.ir/connect/authorize', 'token_endpoint': 'https://sso.irfive.ir/connect/token', 'userinfo_endpoint': 'https://sso.irfive.ir/connect/userinfo', 'end_session_endpoint': 'https://sso.irfive.ir/connect/endsession', 'check_session_iframe': 'https://sso.irfive.ir/connect/checksession', 'revocation_endpoint': 'https://sso.irfive.ir/connect/revocation', 'introspection_endpoint': 'https://sso.irfive.ir/connect/introspect', 'device_authorization_endpoint': 'https://sso.irfive.ir/connect/deviceauthorization', 'frontchannel_logout_supported': true, 'frontchannel_logout_session_supported': true, 'backchannel_logout_supported': true, 'backchannel_logout_session_supported': true, 'scopes_supported': ['openid', 'email', 'identify', 'offline_access'], 'claims_supported': ['sub', 'email', 'email_verified', 'nameid', 'name', 'picture', 'profile'], 'grant_types_supported': ['authorization_code', 'client_credentials', 'refresh_token', 'implicit', 'urn:ietf:params:oauth:grant-type:device_code'], 'response_types_supported': ['code', 'token', 'id_token', 'id_token token', 'code id_token', 'code token', 'code id_token token'], 'response_modes_supported': ['form_post', 'query', 'fragment'], 'token_endpoint_auth_methods_supported': ['client_secret_basic', 'client_secret_post'], 'subject_types_supported': ['public'], 'id_token_signing_alg_values_supported': ['RS256'], 'code_challenge_methods_supported': ['plain', 'S256'], 'request_parameter_supported': true });
-
-        this.client = new fivemIssuer.Client({
-            client_id: 'txadmin_test',
-            client_secret: 'txadmin_test',
-            response_types: ['openid'],
-        });
-        this.client[custom.clock_tolerance] = 2 * 60 * 60; //Two hours due to the DST change.
-        custom.setHttpOptionsDefaults({
-            timeout: 10000,
-        });
-    }
-
-
-    /**
-     * Returns the Provider Auth URL
-     */
     getAuthURL(redirectUri: string, stateKern: string) {
-        if (!this.client) throw new Error(`${modulename} is not ready`);
-
-        const url = this.client.authorizationUrl({
-            redirect_uri: redirectUri,
-            state: getOauthState(stateKern),
-            response_type: 'code',
-            scope: 'openid identify',
-        });
-        if (typeof url !== 'string') throw new Error('url is not string');
-        return url;
+        checkSeed(stateKern);
+        checkCallbackUrl(redirectUri);
+        const url = new URL('/connect/authorize', ssoOrigin);
+        url.search = new URLSearchParams({
+            client_id: clientId, response_type: 'code', redirect_uri: redirectUri,
+            scope: 'identify', state: stateFor(stateKern),
+            code_challenge: hash(verifierFor(stateKern)), code_challenge_method: 'S256',
+        }).toString();
+        return url.href;
     }
 
-
-    /**
-     * Processes the callback and returns the tokenSet
-     */
     async processCallback(sessionCallbackUri: string, sessionStateKern: string, callbackUri: string) {
-        if (!this.client) throw new Error(`${modulename} is not ready`);
-
-        //Process the request
-        const parsedUri = new URL(callbackUri);
-        const callback = parsedUri.searchParams;
-        const callbackCode = callback.get('code');
-        const callbackState = callback.get('state');
-        if (typeof callbackCode !== 'string') throw new Error('code not present');
-        if (typeof callbackState !== 'string') throw new Error('state not present');
-
-        //Exchange code for token
-        const tokenSet = await this.client.callback(
-            sessionCallbackUri,
-            {
-                code: callbackCode,
-                state: callbackState,
-            },
-            {
-                state: getOauthState(sessionStateKern)
-            }
-        );
-        if (typeof tokenSet !== 'object') throw new Error('tokenSet is not an object');
-        if (typeof tokenSet.access_token == 'undefined') throw new Error('access_token not present');
-        if (typeof tokenSet.expires_at == 'undefined') throw new Error('expires_at not present');
-        return tokenSet;
-    }
-
-
-    /**
-     * Gets user info via access token
-     */
-    async getUserInfo(accessToken: string): Promise<UserInfoType> {
-        if (!this.client) throw new Error(`${modulename} is not ready`);
-
-        //Perform introspection
-        const userInfo = await this.client.userinfo(accessToken);
-        const parsed = userInfoSchema.parse(userInfo);
-        let picture: string | undefined;
-        if (typeof userInfo.picture == 'string' && userInfo.picture.startsWith('https://')) {
-            picture = userInfo.picture;
+        checkSeed(sessionStateKern);
+        const expected = checkCallbackUrl(sessionCallbackUri);
+        const actual = new URL(callbackUri);
+        if (actual.origin !== expected.origin || actual.pathname !== expected.pathname
+            || actual.username || actual.password || actual.hash || callbackUri.length > 4096) throw new Error('invalid_state');
+        const params = actual.searchParams;
+        for (const key of params.keys()) {
+            if (!['code', 'state', 'error', 'error_description'].includes(key)
+                || params.getAll(key).length !== 1) throw new Error('invalid_state');
         }
+        const state = params.get('state');
+        if (!state || !same(state, stateFor(sessionStateKern))) throw new Error('invalid_state');
+        if (params.has('error')) throw new Error('provider_rejected');
+        const code = params.get('code');
+        if (!code || !tokenPattern.test(code)) throw new Error('invalid_state');
 
-        return { ...parsed, picture };
+        const result = await got.post(`${ssoOrigin}/connect/token`, {
+            form: { grant_type: 'authorization_code', client_id: clientId, code,
+                redirect_uri: sessionCallbackUri, code_verifier: verifierFor(sessionStateKern) },
+            timeout: { request: 10000 }, retry: { limit: 0 }, followRedirect: false,
+        }).json<unknown>();
+        const token = tokenSchema.parse(result);
+        return { access_token: token.access_token, expires_at: Math.floor(Date.now() / 1000) + token.expires_in };
     }
-};
+
+    async getUserInfo(accessToken: string): Promise<UserInfoType> {
+        if (!tokenPattern.test(accessToken)) throw new Error('invalid_token');
+        const result = await got.get(`${ssoOrigin}/connect/userinfo`, {
+            headers: { authorization: `Bearer ${accessToken}` },
+            timeout: { request: 10000 }, retry: { limit: 0 }, followRedirect: false,
+        }).json<unknown>();
+        const user = userInfoSchema.parse(result);
+        return { ...user, picture: user.picture };
+    }
+}

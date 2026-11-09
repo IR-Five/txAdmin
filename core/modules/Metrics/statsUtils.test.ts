@@ -1,5 +1,5 @@
 //@ts-nocheck
-import { test, expect, suite, it } from 'vitest';
+import { test, expect, suite, it, vi } from 'vitest';
 import { 
     MultipleCounter,
     QuantileArray,
@@ -134,9 +134,8 @@ suite('QuantileArray', () => {
 });
 
 
-suite('TimeCounter', async () => {
+suite('TimeCounter', () => {
     const counter = new TimeCounter();
-    await new Promise((resolve) => setTimeout(resolve, 150));
     const duration = counter.stop();
 
     // Check if the duration is a valid object
@@ -147,13 +146,15 @@ suite('TimeCounter', async () => {
         expect(counter.toJSON()).toEqual(duration);
     });
 
-    // Check if the duration is within the expected range
-    // test('duration within range', () => {
-    //     const isCloseTo50ms = (x: number) => (x > 150 && x < 175);
-    //     expect(duration.seconds * 1000).toSatisfy(isCloseTo50ms);
-    //     expect(duration.milliseconds).toSatisfy(isCloseTo50ms);
-    //     expect(duration.nanoseconds / 1_000_000).toSatisfy(isCloseTo50ms);
-    // });
+    test('duration units use the monotonic clock consistently', () => {
+        const clock = vi.spyOn(process.hrtime, 'bigint')
+            .mockReturnValueOnce(1000000000n)
+            .mockReturnValueOnce(1150000000n);
+        try {
+            const measured = new TimeCounter().stop();
+            expect(measured).toEqual({ nanoseconds: 150000000, milliseconds: 150, seconds: 0.15 });
+        } finally { clock.mockRestore(); }
+    });
 });
 
 

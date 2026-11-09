@@ -12,7 +12,7 @@ import { TabsTrigger, TabsList, TabsContent, Tabs } from "@/components/ui/tabs";
 import { ApiChangeIdentifiersReq, ApiChangePasswordReq } from "@shared/authApiTypes";
 import { useAccountModal, useCloseAccountModal } from "@/hooks/dialogs";
 import { GenericApiOkResp } from "@shared/genericApiTypes";
-import { fetchWithTimeout, useAuthedFetcher, useBackendApi } from "@/hooks/fetch";
+import { useAuthedFetcher, useBackendApi } from "@/hooks/fetch";
 import consts from "@shared/consts";
 import { txToast } from "@/components/TxToaster";
 import useSWR from 'swr';
@@ -88,7 +88,7 @@ function ChangePasswordTab() {
                     Your account has a temporary password that needs to be changed before you can use this web panel. <br />
                     <strong>Make sure to take note of your new password before saving.</strong>
                 </p>) : (<p className="text-sm text-muted-foreground">
-                    You can use your password to login to the txAdmin inferface even without using the Cfx.re login button.
+                    You can use your password to login to the txAdmin inferface even without using the IRFive login button.
                 </p>)}
                 <div className="space-y-3 pt-2 pb-6">
                     {!authData.isTempPassword && (
@@ -162,7 +162,6 @@ function ChangeIdentifiersTab() {
     const [cfxreId, setCfxreId] = useState('');
     const [discordId, setDiscordId] = useState('');
     const [error, setError] = useState('');
-    const [isConvertingFivemId, setIsConvertingFivemId] = useState(false);
     const closeAccountModal = useCloseAccountModal();
     const [isSaving, setIsSaving] = useState(false);
 
@@ -198,6 +197,7 @@ function ChangeIdentifiersTab() {
         changeIdentifiersApi({
             data: { cfxreId, discordId },
             error: (error) => {
+                setIsSaving(false);
                 setError(error);
             },
             success: (data) => {
@@ -212,27 +212,10 @@ function ChangeIdentifiersTab() {
         });
     };
 
-    const handleCfxreIdBlur = async () => {
-        if (!cfxreId) return;
+    const handleCfxreIdBlur = () => {
         const trimmed = cfxreId.trim();
-        if (/^\d+$/.test(trimmed)) {
-            setCfxreId(`fivem:${trimmed}`);
-        } else if (!trimmed.startsWith('fivem:')) {
-            try {
-                setIsConvertingFivemId(true);
-                const forumData = await fetchWithTimeout(`https://forum.cfx.re/u/${trimmed}.json`);
-                if (forumData.user && typeof forumData.user.id === 'number') {
-                    setCfxreId(`fivem:${forumData.user.id}`);
-                } else {
-                    setError('Could not find the user in the forum. Make sure you typed the username correctly.');
-                }
-            } catch (error) {
-                setError('Failed to check the identifiers on the forum API.');
-            }
-            setIsConvertingFivemId(false);
-        } else if (cfxreId !== trimmed) {
-            setCfxreId(trimmed);
-        }
+        // Resolve forum usernames on the backend, avoiding browser CORS and stale blur responses.
+        setCfxreId(/^\d{1,8}$/.test(trimmed) ? `irfive:${trimmed}` : trimmed);
     }
 
     const handleDiscordIdBlur = () => {
@@ -254,15 +237,15 @@ function ChangeIdentifiersTab() {
                 </p>
                 <div className="space-y-3 pt-2 pb-6">
                     <div className="space-y-1">
-                        <Label htmlFor="cfxreId">FiveM identifier <span className="text-sm opacity-75 text-info">(optional)</span></Label>
+                        <Label htmlFor="cfxreId">IRFive identifier <span className="text-sm opacity-75 text-info">(optional)</span></Label>
                         <Input
                             id="cfxreId"
                             autoCapitalize="none"
                             autoComplete="off"
                             autoCorrect="off"
-                            placeholder="fivem:000000"
-                            value={currIdsResp.isLoading || isConvertingFivemId ? 'loading...' : cfxreId}
-                            disabled={currIdsResp.isLoading || isConvertingFivemId}
+                            placeholder="irfive:000000"
+                            value={currIdsResp.isLoading ? 'loading...' : cfxreId}
+                            disabled={currIdsResp.isLoading}
                             autoFocus
                             onBlur={handleCfxreIdBlur}
                             onChange={(e) => {
@@ -272,8 +255,8 @@ function ChangeIdentifiersTab() {
                         />
                         <p className="text-sm text-muted-foreground">
                             Your identifier can be found by clicking in your name in the playerlist and going to the IDs page. <br />
-                            You can also type in your <TxAnchor href="https://forum.cfx.re/">forum.cfx.re</TxAnchor> username and it will be converted automatically. <br />
-                            This is required if you want to login using the Cfx.re button.
+                            You can also type in your <TxAnchor href="https://forum.irfive.ir/">forum.irfive.ir</TxAnchor> username and it will be converted automatically. <br />
+                            This is required if you want to login using the IRFive button.
                         </p>
                     </div>
                     <div className="space-y-1">

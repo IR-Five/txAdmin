@@ -4,11 +4,13 @@ import fsp from 'node:fs/promises';
 import { cloneDeep } from 'lodash-es';
 import { nanoid } from 'nanoid';
 import { txHostConfig } from '@core/globalData';
-import CfxProvider from './providers/CitizenFX.js';
+import CfxProvider from './providers/CitizenFX';
+import consts from '@shared/consts';
+import { getIdFromOauthNameid } from '@lib/player/idUtils';
 import { createHash } from 'node:crypto';
-import consoleFactory from '@lib/console.js';
-import fatalError from '@lib/fatalError.js';
-import { chalkInversePad } from '@lib/misc.js';
+import consoleFactory from '@lib/console';
+import fatalError from '@lib/fatalError';
+import { chalkInversePad } from '@lib/misc';
 const console = consoleFactory(modulename);
 
 //NOTE: The way I'm doing versioning right now is horrible but for now it's the best I can do
@@ -22,8 +24,14 @@ const migrateProviderIdentifiers = (providerName, providerData) => {
     if (providerName === 'citizenfx') {
         // data may be empty, or nameid may be invalid
         try {
-            const res = /\/user\/(\d{1,8})/.exec(providerData.data.nameid);
-            providerData.identifier = `fivem:${res[1]}`;
+            const nameid = providerData.data.nameid;
+            const irfiveIdentifier = getIdFromOauthNameid(nameid);
+            const legacy = typeof nameid === 'string'
+                ? /^https:\/\/forum\.cfx\.re\/internal\/user\/(\d{1,8})$/.exec(nameid)
+                : null;
+            if (irfiveIdentifier) providerData.identifier = irfiveIdentifier;
+            else if (legacy) providerData.identifier = `fivem:${legacy[1]}`;
+            else throw new Error('Unrecognized legacy account namespace');
         } catch (error) {
             providerData.identifier = 'fivem:00000000';
         }
@@ -118,7 +126,7 @@ export default class AdminStore {
                 const { username, fivemId, password } = txHostConfig.defaults.account;
                 this.createAdminsFile(
                     username,
-                    fivemId ? `fivem:${fivemId}` : undefined,
+                    fivemId ? `irfive:${fivemId}` : undefined,
                     undefined,
                     password,
                     password ? false : undefined,
@@ -355,11 +363,30 @@ export default class AdminStore {
      * @param {string} password
      * @param {array} permissions
      */
+    assertIdentifiersAvailable(citizenfxData, discordData, exceptName) {
+        const entries = [[citizenfxData, 'account'], [discordData, 'discord']];
+        for (const [data, type] of entries) {
+            if (!data) continue;
+            if (typeof data.id !== 'string' || typeof data.identifier !== 'string') throw new Error('Invalid provider data');
+            const identifier = data.identifier.toLowerCase();
+            const valid = type === 'discord'
+                ? consts.validIdentifiers.discord.test(identifier)
+                : consts.validIdentifiers.irfive.test(identifier) || consts.validIdentifiers.fivem.test(identifier);
+            if (!valid) throw new Error('Invalid provider identifier');
+            const taken = this.admins.some(admin => admin.name.toLowerCase() !== exceptName?.toLowerCase()
+                && Object.values(admin.providers).some(provider => provider.identifier.toLowerCase() === identifier));
+            if (taken) {
+                throw new Error('This identifier is already linked to another admin.');
+            }
+        }
+    }
+
     async addAdmin(name, citizenfxData, discordData, password, permissions) {
         if (this.admins == false) throw new Error('Admins not set');
 
         //Check if username is already taken
         if (this.getAdminByName(name)) throw new Error('Username already taken');
+        this.assertIdentifiersAvailable(citizenfxData, discordData);
 
         //Preparing admin
         const admin = {
@@ -372,10 +399,8 @@ export default class AdminStore {
             permissions,
         };
 
-        //Check if provider uid already taken and inserting into admin object
+        //Provider identifiers were checked before constructing the account.
         if (citizenfxData) {
-            const existingCitizenFX = this.getAdminByProviderUID(citizenfxData.id);
-            if (existingCitizenFX) throw new Error('CitizenFX ID already taken');
             admin.providers.citizenfx = {
                 id: citizenfxData.id,
                 identifier: citizenfxData.identifier,
@@ -383,8 +408,6 @@ export default class AdminStore {
             };
         }
         if (discordData) {
-            const existingDiscord = this.getAdminByProviderUID(discordData.id);
-            if (existingDiscord) throw new Error('Discord ID already taken');
             admin.providers.discord = {
                 id: discordData.id,
                 identifier: discordData.identifier,
@@ -420,6 +443,7 @@ export default class AdminStore {
             return (username === user.name.toLowerCase());
         });
         if (adminIndex == -1) throw new Error('Admin not found');
+        this.assertIdentifiersAvailable(citizenfxData, discordData, name);
 
         //Editing admin
         if (password !== null) {

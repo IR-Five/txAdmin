@@ -4,14 +4,11 @@ import consoleFactory from '@lib/console';
 import consts from '@shared/consts';
 import { GenericApiResp } from '@shared/genericApiTypes';
 import { z } from 'zod';
-import got from '@lib/got';
+import { resolveAdminIdentity, type AdminIdentity } from '@lib/player/resolveAdminIdentity';
 const console = consoleFactory(modulename);
 
 //Helpers 
-const cfxHttpReqOptions = {
-    timeout: { request: 6000 },
-};
-type ProviderDataType = {id: string, identifier: string};
+type ProviderDataType = AdminIdentity;
 
 const bodySchema = z.object({
     cfxreId: z.string().trim(),
@@ -32,32 +29,11 @@ export default async function AuthChangeIdentifiers(ctx: AuthedCtx) {
     }
     const { cfxreId, discordId } = schemaRes.data;
 
-    //Validate & translate FiveM ID
-    let citizenfxData: ProviderDataType | false = false;
-    if (cfxreId.length) {
-        try {
-            if (consts.validIdentifiers.fivem.test(cfxreId)) {
-                const id = cfxreId.split(':')[1];
-                const res = await got(`https://policy-live.fivem.net/api/getUserInfo/${id}`, cfxHttpReqOptions).json<any>();
-                if (!res.username || !res.username.length) {
-                    return ctx.send<GenericApiResp>({
-                        error: `(ERR1) Invalid CitizenFX ID`,
-                    });
-                }
-                citizenfxData = {
-                    id: res.username,
-                    identifier: cfxreId,
-                };
-            } else {
-                return ctx.send<GenericApiResp>({
-                    error: `(ERR3) Invalid CitizenFX ID`,
-                });
-            }
-        } catch (error) {
-            return ctx.send<GenericApiResp>({
-                error: `Failed to resolve CitizenFX ID to game identifier with error: ${(error as Error).message}`,
-            });
-        }
+    let citizenfxData: ProviderDataType | false;
+    try {
+        citizenfxData = await resolveAdminIdentity(cfxreId);
+    } catch (error) {
+        return ctx.send<GenericApiResp>({ error: (error as Error).message });
     }
 
     //Validate Discord ID

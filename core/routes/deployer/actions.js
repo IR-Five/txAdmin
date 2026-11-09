@@ -89,12 +89,13 @@ async function handleSetVariables(ctx) {
     const userVars = cloneDeep(ctx.request.body);
 
     //Validating sv_licenseKey
-    // if (
-    //     !consts.regexSvLicenseNew.test(userVars.svLicense)
-    //     && !consts.regexSvLicenseOld.test(userVars.svLicense)
-    // ) {
-    //     return ctx.send({ type: 'danger', message: 'The Server License does not appear to be valid.' });
-    // }
+    if (typeof userVars.svLicense !== 'string' || (
+        !consts.regexSvLicenseIrFive.test(userVars.svLicense)
+        && !consts.regexSvLicenseNew.test(userVars.svLicense)
+        && !consts.regexSvLicenseOld.test(userVars.svLicense)
+    )) {
+        return ctx.send({ type: 'danger', message: 'The Server License does not appear to be valid.' });
+    }
 
     //Validating steam api key requirement
     if (

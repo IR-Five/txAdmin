@@ -5,25 +5,25 @@ const regexDiscordSnowflake = /^\d{17,20}$/;
 
 export default {
     //Identifier stuff
-    regexValidHwidToken: /^[a-zA-Z0-9]{10,150}$/,
+    regexValidHwidToken: /^(?:[0-9A-Fa-f]{1,2}:[0-9A-Fa-f]{64}|[a-zA-Z0-9]{10,150})$/,
     validIdentifiers: {
         // https://github.com/discordjs/discord.js/pull/9144
         // validated in txtracker dataset
         discord: /^discord:\d{17,20}$/,
         fivem: /^fivem:\d{1,8}$/,
         irfive: /^irfive:\d{1,8}$/i,
-        license: /^license:[a-zA-Z0-9]{14,60}$/,   // ← تغییر دادیم
-        license2: /^license2:[a-zA-Z0-9]{14,60}$/, // ← تغییر دادیم
+        license: /^license:[a-zA-Z0-9]{14,60}$/,
+        license2: /^license2:[a-zA-Z0-9]{14,60}$/,
         live: /^live:\d{14,20}$/,
         steam: /^steam:1100001[0-9A-Fa-f]{8}$/,
         xbl: /^xbl:\d{14,20}$/,
     },
     validIdentifierParts: {
         discord: regexDiscordSnowflake,
-        fivem: /^fivem:\d{1,8}$/,
-        irfive: /^irfive:\d{1,8}$/i,
-        license: /^license:[a-zA-Z0-9]{14,60}$/,   // ← تغییر دادیم
-        license2: /^license2:[a-zA-Z0-9]{14,60}$/, // ← تغییر دادیم
+        fivem: /^\d{1,8}$/,
+        irfive: /^\d{1,8}$/,
+        license: /^[a-zA-Z0-9]{14,60}$/,
+        license2: /^[a-zA-Z0-9]{14,60}$/,
         live: /^\d{14,20}$/,
         steam: /^1100001[0-9A-Fa-f]{8}$/,
         xbl: /^\d{14,20}$/,
@@ -40,6 +40,7 @@ export default {
     regexDiscordSnowflake,
     regexSvLicenseOld: /^\w{32}$/,
     regexSvLicenseNew: /^cfxk_\w{1,60}_\w{1,20}$/,
+    regexSvLicenseIrFive: /^irfive_[A-Za-z0-9_-]{1,79}$/,
     regexValidIP: /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/,
     actionIdAlphabet,
     nuiWebpipePath: 'https://monitor/WebPipe/',

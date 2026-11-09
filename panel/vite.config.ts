@@ -1,11 +1,13 @@
 import path from 'node:path';
+import fs from 'node:fs';
 import { visualizer } from "rollup-plugin-visualizer";
 import { PluginOption, UserConfig, defineConfig } from 'vite';
 import react from '@vitejs/plugin-react-swc';
 // import tsconfigPaths from 'vite-tsconfig-paths';
 import { licenseBanner } from '../scripts/build/utils';
 import { parseTxDevEnv } from '../shared/txDevEnv';
-process.loadEnvFile('../.env');
+const envPath = path.resolve(__dirname, '../.env');
+if (fs.existsSync(envPath)) process.loadEnvFile(envPath);
 
 //Check if TXDEV_VITE_URL is set
 const txDevEnv = parseTxDevEnv();

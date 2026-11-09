@@ -64,6 +64,7 @@ export type InjectedTxConsts = {
 export type PlayerIdsObjectType = {
     discord: string | null;
     fivem: string | null;
+    irfive: string | null;
     license: string | null;
     license2: string | null;
     live: string | null;

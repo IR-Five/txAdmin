@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { SemVer } from 'semver';
 import config from './config';
+import { execFileSync } from 'node:child_process';
 
 
 /**
@@ -79,38 +80,34 @@ export const getFxsPaths = (fxserverPath: string) => {
 };
 
 
-/**
- * Extracts the version from the GITHUB_REF env var and detects if pre-release
- * NOTE: to run locally: `GITHUB_REF="refs/tags/v9.9.9" npm run build`
- */
-export const getPublishVersion = (isOptional: boolean) => {
+/** Resolve an explicit version, tagged CI ref, or a reachable local version tag. */
+export const getPublishVersion = (isOptional: boolean, explicitTag?: string) => {
     const workflowRef = process.env.GITHUB_REF;
-    try {
-        if (!workflowRef) {
-            if (isOptional) {
-                return {
-                    txVersion: '9.9.9-dev',
-                    isPreRelease: false,
-                    preReleaseExpiration: '0',
-                };
-            } else {
-                throw new Error('No --tag found.');
-            }
-        }
-        const refRemoved = workflowRef.replace(/^(refs\/tags\/)?v/, '');
-        const parsedVersion = new SemVer(refRemoved);
-        const isPreRelease = parsedVersion.prerelease.length > 0;
-        const potentialExpiration = new Date().setUTCHours(24 * config.preReleaseExpirationDays, 0, 0, 0);
-        console.log(`txAdmin version ${parsedVersion.version}.`);
-        return {
-            txVersion: parsedVersion.version,
-            isPreRelease,
-            preReleaseExpiration: isPreRelease ? potentialExpiration.toString() : '0',
-        };
-    } catch (error) {
-        console.error('Version setup failed: ' + error.message);
-        process.exit(1);
+    let version = explicitTag ?? process.env.TXADMIN_BUILD_VERSION;
+    if (version === undefined && workflowRef?.startsWith('refs/tags/')) version = workflowRef;
+    if (version === undefined && isOptional) {
+        return { txVersion: '9.9.9-dev', isPreRelease: false, preReleaseExpiration: '0' };
     }
+    if (version === undefined) {
+        try {
+            version = execFileSync('git', ['describe', '--tags', '--abbrev=0', '--match', 'v[0-9]*', 'HEAD'], {
+                encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'],
+            }).trim();
+        } catch {
+            throw new Error('Version setup failed: set TXADMIN_BUILD_VERSION=vX.Y.Z or fetch upstream version tags.');
+        }
+    }
+    const normalized = version.replace(/^(?:refs\/tags\/)?v?/, '');
+    let parsed: SemVer;
+    try { parsed = new SemVer(normalized); }
+    catch { throw new Error('Version setup failed: expected a semantic version such as v8.1.2.'); }
+    const isPreRelease = parsed.prerelease.length > 0;
+    const expiration = Date.now() + config.preReleaseExpirationDays * 86400000;
+    console.log(`txAdmin version ${parsed.version}.`);
+    return {
+        txVersion: parsed.version, isPreRelease,
+        preReleaseExpiration: isPreRelease ? expiration.toString() : '0',
+    };
 };
 
 

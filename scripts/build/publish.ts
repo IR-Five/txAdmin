@@ -6,35 +6,22 @@ import {
     licenseBanner,
 } from './utils';
 
-// ───────────────────────────────────────────────────────────────
-// STEP 1: Parse CLI arguments
-const tagArg = process.argv.find(arg => arg.startsWith('--tag='));
-if (!tagArg) {
-    throw new Error('Version setup failed: No --tag found.');
-}
-const tag = tagArg.split('=')[1];
+// Optional CLI version overrides the environment; local builds can use a reachable Git tag.
+const tagArgs = process.argv.slice(2).filter(arg => arg.startsWith('--tag='));
+if (tagArgs.length > 1) throw new Error('Provide --tag only once.');
+const explicitTag = tagArgs[0]?.slice('--tag='.length);
+if (explicitTag !== undefined && !explicitTag) throw new Error('--tag must not be empty.');
+const { txVersion, isPreRelease, preReleaseExpiration } = getPublishVersion(false, explicitTag);
 
-// ───────────────────────────────────────────────────────────────
-// STEP 2: Detect version using the tag
-const { txVersion, isPreRelease, preReleaseExpiration } = getPublishVersion(tag);
-
-// ───────────────────────────────────────────────────────────────
-// STEP 3: Write CI env file
 fs.writeFileSync('.github/.cienv', `TX_IS_PRERELEASE=${isPreRelease}\n`);
 
-// ───────────────────────────────────────────────────────────────
-// STEP 4: Copy static files
 console.log('Starting txAdmin Prod Builder');
 copyStaticFiles('./dist/', txVersion, 'publish');
 
-// ───────────────────────────────────────────────────────────────
-// STEP 5: Create required metadata files
 fs.writeFileSync('./dist/.yarn.installed', '');
 fs.writeFileSync('./dist/package.json', '{"type":"commonjs"}');
 fs.writeFileSync('./dist/LICENSE.txt', licenseBanner());
 
-// ───────────────────────────────────────────────────────────────
-// STEP 6: Transpile & bundle core
 try {
     const { errors } = esbuild.buildSync({
         entryPoints: ['./core'],

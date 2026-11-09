@@ -408,8 +408,8 @@ if (hostVars.DEFAULT_ACCOUNT) {
     }
     if (fivemId && !consts.validIdentifierParts.fivem.test(fivemId)) {
         fatalError.GlobalData(22, [
-            'Invalid default account FiveM ID.',
-            'It should match the number in the fivem:0000000 game identifier.',
+            'Invalid default account IRFive ID.',
+            'It should match the number in the irfive:0000000 game identifier.',
             ...errArr,
         ]);
     }

@@ -3,6 +3,7 @@ import { DbInstance, SavePriority } from "../instance";
 import { DatabasePlayerType } from "../databaseTypes";
 import { DuplicateKeyError } from "../dbUtils";
 import consoleFactory from '@lib/console';
+import consts from '@shared/consts';
 const console = consoleFactory('DatabaseDao');
 
 
@@ -27,9 +28,9 @@ export default class PlayersDao {
      * Searches for a player in the database by the license, returns null if not found or false in case of error
      */
     findOne(license: string): DatabasePlayerType | null {
-        // if (!/[0-9A-Fa-f]{40}/.test(license)) {
-        //     throw new Error('Invalid reference type');
-        // }
+        if (typeof license !== 'string' || !consts.validIdentifierParts.license.test(license)) {
+            throw new Error('Invalid reference type');
+        }
 
         //Performing search
         const p = this.chain.get('players')

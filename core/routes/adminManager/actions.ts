@@ -1,7 +1,7 @@
 const modulename = 'WebServer:AdminManagerActions';
 import { customAlphabet } from 'nanoid';
 import dict49 from 'nanoid-dictionary/nolookalikes';
-import got from '@lib/got';
+import { resolveAdminIdentity, type AdminIdentity } from '@lib/player/resolveAdminIdentity';
 import consts from '@shared/consts';
 import consoleFactory from '@lib/console';
 import { AuthedCtx } from '@modules/WebServer/ctxTypes';
@@ -11,10 +11,7 @@ const console = consoleFactory(modulename);
 const nanoid = customAlphabet(dict49, 20);
 //NOTE: this desc misses that it should start and end with alphanum or _, and cannot have repeated -_.
 const nameRegexDesc = 'up to 20 characters containing only letters, numbers and the characters \`_.-\`';
-const cfxHttpReqOptions = {
-    timeout: { request: 6000 },
-};
-type ProviderDataType = { id: string, identifier: string };
+type ProviderDataType = AdminIdentity;
 
 /**
  * Returns the output page containing the admins.
@@ -79,35 +76,12 @@ async function handleAdd(ctx: AuthedCtx) {
         return ctx.send({ type: 'danger', markdown: true, message: `**Invalid username, it must follow the rule:**\n${nameRegexDesc}` });
     }
 
-    //Validate & translate FiveM ID
-    let citizenfxData: ProviderDataType | false = false;
-    if (citizenfxID.length) {
-        try {
-            if (consts.validIdentifiers.fivem.test(citizenfxID)) {
-                const id = citizenfxID.split(':')[1];
-                const res = await got(`https://policy-live.fivem.net/api/getUserInfo/${id}`, cfxHttpReqOptions).json<any>();
-                if (!res.username || !res.username.length) {
-                    return ctx.send({ type: 'danger', message: 'Invalid CitizenFX ID1' });
-                }
-                citizenfxData = {
-                    id: res.username,
-                    identifier: citizenfxID,
-                };
-            } else if (consts.regexValidFivemUsername.test(citizenfxID)) {
-                const res = await got(`https://forum.cfx.re/u/${citizenfxID}.json`, cfxHttpReqOptions).json<any>();
-                if (!res.user || typeof res.user.id !== 'number') {
-                    return ctx.send({ type: 'danger', message: 'Invalid CitizenFX ID2' });
-                }
-                citizenfxData = {
-                    id: citizenfxID,
-                    identifier: `fivem:${res.user.id}`,
-                };
-            } else {
-                return ctx.send({ type: 'danger', message: 'Invalid CitizenFX ID3' });
-            }
-        } catch (error) {
-            console.error(`Failed to resolve CitizenFX ID to game identifier with error: ${(error as Error).message}`);
-        }
+    // Resolve full identifiers locally; usernames are resolved only by the IRFive forum.
+    let citizenfxData: ProviderDataType | false;
+    try {
+        citizenfxData = await resolveAdminIdentity(citizenfxID);
+    } catch (error) {
+        return ctx.send({ type: 'danger', message: (error as Error).message });
     }
 
     //Validate Discord ID
@@ -184,35 +158,12 @@ async function handleEdit(ctx: AuthedCtx) {
         }
     }
 
-    //Validate & translate FiveM ID
-    let citizenfxData: ProviderDataType | false = false;
-    if (citizenfxID.length) {
-        try {
-            if (consts.validIdentifiers.fivem.test(citizenfxID)) {
-                const id = citizenfxID.split(':')[1];
-                const res = await got(`https://policy-live.fivem.net/api/getUserInfo/${id}`, cfxHttpReqOptions).json<any>();
-                if (!res.username || !res.username.length) {
-                    return ctx.send({ type: 'danger', message: '(ERR1) Invalid CitizenFX ID' });
-                }
-                citizenfxData = {
-                    id: res.username,
-                    identifier: citizenfxID,
-                };
-            } else if (consts.regexValidFivemUsername.test(citizenfxID)) {
-                const res = await got(`https://forum.cfx.re/u/${citizenfxID}.json`, cfxHttpReqOptions).json<any>();
-                if (!res.user || typeof res.user.id !== 'number') {
-                    return ctx.send({ type: 'danger', message: '(ERR2) Invalid CitizenFX ID' });
-                }
-                citizenfxData = {
-                    id: citizenfxID,
-                    identifier: `fivem:${res.user.id}`,
-                };
-            } else {
-                return ctx.send({ type: 'danger', message: '(ERR3) Invalid CitizenFX ID' });
-            }
-        } catch (error) {
-            console.error(`Failed to resolve CitizenFX ID to game identifier with error: ${(error as Error).message}`);
-        }
+    // Resolve full identifiers locally; usernames are resolved only by the IRFive forum.
+    let citizenfxData: ProviderDataType | false;
+    try {
+        citizenfxData = await resolveAdminIdentity(citizenfxID);
+    } catch (error) {
+        return ctx.send({ type: 'danger', message: (error as Error).message });
     }
 
     //Validate Discord ID
@@ -264,11 +215,11 @@ async function handleEdit(ctx: AuthedCtx) {
     }
     const prevCfxId = admin.providers?.citizenfx?.identifier;
     if (!prevCfxId && citizenfxData) {
-        changes.push(`Added Cfx.re ID: ${citizenfxData.identifier}.`);
+        changes.push(`Added Account ID: ${citizenfxData.identifier}.`);
     } else if (prevCfxId && !citizenfxData) {
-        changes.push(`Removed Cfx.re ID: ${prevCfxId}.`);
+        changes.push(`Removed Account ID: ${prevCfxId}.`);
     } else if (prevCfxId && citizenfxData && prevCfxId !== citizenfxData.identifier) {
-        changes.push(`Changed Cfx.re ID from ${prevCfxId} to ${citizenfxData.identifier}.`);
+        changes.push(`Changed Account ID from ${prevCfxId} to ${citizenfxData.identifier}.`);
     }
     const prevDiscordId = admin.providers?.discord?.identifier;
     if (!prevDiscordId && discordData) {
